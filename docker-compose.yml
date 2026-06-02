@@ -1,0 +1,48 @@
+version: "3.9"
+services:
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+  fakecheck-api:
+    build: ./fakecheck-api
+    environment:
+      - CORS_ORIGIN=http://localhost:5173
+      - FAKECHECK_INTERNAL_API_KEY=${FAKECHECK_INTERNAL_API_KEY:-dev-internal-key}
+      - MONGO_URI=mongodb://mongo:27017/securenest
+      - REDIS_URL=redis://redis:6379
+      - GOOGLE_FACTCHECK_API_KEY=${GOOGLE_FACTCHECK_API_KEY}
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+      - NLI_MODEL=${NLI_MODEL:-facebook/bart-large-mnli}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongo
+      - redis
+  backend:
+    working_dir: /app
+    image: node:22-alpine
+    command: sh -c "npm ci && npm run dev"
+    environment:
+      - PORT=5003
+      - JWT_SECRET=${JWT_SECRET:-devsecret}
+      - MONGO_URI=mongodb://mongo:27017/securenest
+      - FAKECHECK_API_URL=http://fakecheck-api:8000
+      - FAKECHECK_API_KEY=${FAKECHECK_INTERNAL_API_KEY:-dev-internal-key}
+    volumes:
+      - ./SecureNest/Chat-App/backend:/app
+    ports:
+      - "5003:5003"
+    depends_on:
+      - mongo
+      - fakecheck-api
+volumes:
+  mongo_data:
